@@ -1,6 +1,6 @@
 from app.models.database import db
 from datetime import datetime
-
+from app.utils.encryption import decrypt_value
 
 class AgentOtherThanIndividualEntity(db.Model):
     __tablename__ = "agent_entity_details_t"
@@ -38,16 +38,16 @@ class AgentOtherThanIndividualEntity(db.Model):
             "id": self.id,
             "designation": self.designation,
             "name": self.name,
-            "email_id": self.email_id,
-            "mobile_number": self.mobile_number,
+            "email_id": decrypt_value(self.email_id) if self.email_id else None,
+            "mobile_number": decrypt_value(self.mobile_number) if self.mobile_number else None,
             "state_ut": self.state_ut,
             "district": self.district,
             "address_line1": self.address_line1,
             "address_line2": self.address_line2,
             "pincode": self.pincode,
-            "pan_card_number": self.pan_card_number,
+            "pan_card_number": decrypt_value(self.pan_card_number) if self.pan_card_number else None,
             "pan_card_doc": self.pan_card_doc,
-            "aadhaar_number": self.aadhaar_number,
+            "aadhaar_number": decrypt_value(self.aadhaar_number) if self.aadhaar_number else None,
             "aadhaar_doc": self.aadhaar_doc,
             "photograph": self.photograph,
             "address_proof": self.address_proof,

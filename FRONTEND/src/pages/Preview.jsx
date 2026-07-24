@@ -99,9 +99,9 @@ useEffect(() => {
     try {
       const agentId = data.agent_details.agent_id;
 
-      const res = await apiPost("/api/agent/send-otp", {
-        agent_id: agentId,
-      });
+      const res = await apiPost("/api/otp/send-email", {
+    panNumber: data.agent_details.pan,
+});
 
       if (res.success) {
         alert("OTP sent to registered email");
@@ -124,10 +124,10 @@ useEffect(() => {
     setVerifying(true);
 
     try {
-      const res = await apiPost("/api/agent/verify-otp", {
-        agent_id: data.agent_details.agent_id,
-        otp,
-      });
+    const res = await apiPost("/api/otp/verify", {
+    panNumber: data.agent_details.pan,
+    otp: otp,
+});
 
       if (res.success) {
         alert("OTP verified successfully");

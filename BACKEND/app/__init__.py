@@ -347,6 +347,11 @@ def create_app():
     app.register_blueprint(agent_bp, url_prefix="/api/agent")
     app.register_blueprint(otp_bp, url_prefix="/api/otp")
 
+    print("\n========== REGISTERED ROUTES ==========")
+    for rule in app.url_map.iter_rules():
+      print(rule)
+    print("=======================================\n")
+
     app.register_blueprint(projectapplicationdetailsextension_bp, url_prefix="/api")
     app.register_blueprint(login_bp, url_prefix="/api")
     app.register_blueprint(othertheninduvidual_project_registration_bp, url_prefix="/api")

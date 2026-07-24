@@ -8,7 +8,7 @@ from sqlalchemy import or_, text
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.database import db
-
+from app.utils.encryption import encrypt_value, decrypt_value
 
 def normalize_field_label(value):
     cleaned = "".join(
@@ -310,7 +310,7 @@ class AgentRegistrationDetails(db.Model):
                 "success": True,
                 "application_no": row.get("application_no"),
                 "agent_name": row.get("agent_name"),
-                "email": row.get("email")
+                "email": decrypt_value(row.get("email")) if row.get("email") else None
             }
 
         except Exception as e:

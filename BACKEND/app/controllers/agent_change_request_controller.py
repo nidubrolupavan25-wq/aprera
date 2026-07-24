@@ -13,6 +13,7 @@ from app.utils.mail_service import (
 )
 from app.utils.validation_schemas import validate_registration
 from flask_jwt_extended import jwt_required
+from app.utils.encryption import encrypt_value, decrypt_value
 
 agent_change_request_bp = Blueprint("agent_change_request_bp", __name__)
 
@@ -349,7 +350,7 @@ def get_full_change_requests():
 
                 # BASIC INFO
                 "applicationNo": req.application_no,
-                "panNumber": req.pan_number,
+                "panNumber": decrypt_value(req.pan_number) if req.pan_number else None,
                 "applicantType": req.applicant_type,
 
                 # ISSUE INFO
@@ -611,7 +612,7 @@ def save_change_request():
             return validation_error
         change_request = AgentChangeRequest(
 
-            pan_number=data.get("panNumber"),
+            pan_number=encrypt_value(data.get("panNumber")),
             application_no=data.get("applicationNo"),
             applicant_type=data.get("applicantType"),
 

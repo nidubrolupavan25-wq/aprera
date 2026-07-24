@@ -9,9 +9,10 @@ import json
 
 from app.models.agent_registration_model import AgentModel
 from app.utils.validation_schemas import validate_registration
-from flask_jwt_extended import get_jwt_identity, jwt_required
+from flask_jwt_extended import get_jwt_identity, get_jwt, jwt_required
 from app.utils.role_required import roles_required
 from flask_jwt_extended import create_access_token
+from app.utils.encryption import decrypt_value, encrypt_value
 
 agent_bp = Blueprint("agent", __name__)
 UPLOAD_FOLDER = "uploads/agents"
@@ -80,9 +81,9 @@ def register_agent_step1():
 
         projects_list = json.loads(projects) if projects else []
         litigations_list = json.loads(litigations) if litigations else []
-                # Attach litigation certificate files
+        
+        # Attach litigation certificate files
         for i, l in enumerate(litigations_list):
-
             interim_file = files.get(f"interimCert_{i}")
             disposed_file = files.get(f"disposedCert_{i}")
 
@@ -95,6 +96,7 @@ def register_agent_step1():
                 l["disposed_certificate"] = save_file(disposed_file)
             else:
                 l["disposed_certificate"] = None
+                
         other_rera_list = json.loads(other_rera) if other_rera else []
 
         data = {
@@ -203,29 +205,15 @@ def register_agent_step2():
 
 # ================= PREVIEW =================
 @agent_bp.route("/preview/<int:agent_id>", methods=["GET"])
-@jwt_required()
-@roles_required(
-    "SCRUTINY",
-    "LEGAL_L1",
-    "LEGAL_L2",
-    "PLANNING",
-    "AUDIT",
-    "ENGINEER",
-    "AD",
-    "DIRECTOR",
-    "CHAIRMAN",
-    "ADMIN",
-    "SUPER_ADMIN",
-    "SENIARADIT",
-    "AGENT"
-)
 def agent_preview(agent_id):
+    """Get agent preview data - Public endpoint for registration preview"""
     result = AgentModel.get_agent_preview(agent_id)
 
     if result["success"]:
         return jsonify(result), 200
 
     return jsonify(result), 404
+
 
 @agent_bp.route("/check-pan", methods=["POST"])
 def check_pan():
@@ -254,88 +242,9 @@ def check_pan():
             "success": False,
             "message": "Internal server error"
         }), 500
-    
-@agent_bp.route("/send-otp", methods=["POST"])
-def send_otp():
-    try:
-        data = request.get_json()
-        agent_id = data.get("agent_id")
 
-        if not agent_id:
-            return jsonify({
-                "success": False,
-                "message": "agent_id required"
-            }), 400
 
-        result = AgentModel.send_otp(agent_id)
-        return jsonify(result), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": "Internal server error"
-        }), 500
-    
-@agent_bp.route("/verify-otp", methods=["POST"])
-def verify_otp():
-    try:
-        data = request.get_json()
-
-        pan = data.get("panNumber")
-        otp = data.get("otp")
-
-        if not pan or not otp:
-            return jsonify({
-                "success": False,
-                "message": "PAN and OTP required"
-            }), 400
-
-        result = AgentModel.verify_otp_by_pan(
-        pan.strip().upper(),
-        otp
-)
-
-        if not result["success"]:
-            return jsonify(result), 401
-
-        access_token = create_access_token(
-            identity=str(result["agent_id"]),
-            additional_claims={
-                "role": "AGENT"
-            }
-        )
-
-        return jsonify({
-            "success": True,
-            "message": "OTP verified successfully",
-            "token": access_token,
-            "pan": result["pan"],
-            "agent_name": result["agent_name"],
-            "application_no": result["application_no"]
-        }), 200
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": str(e)
-        }), 500
 @agent_bp.route("/payment-details/<int:agent_id>", methods=["GET"])
-@jwt_required()
-@roles_required(
-    "SCRUTINY",
-    "LEGAL_L1",
-    "LEGAL_L2",
-    "PLANNING",
-    "AUDIT",
-    "ENGINEER",
-    "AD",
-    "DIRECTOR",
-    "CHAIRMAN",
-    "ADMIN",
-    "SUPER_ADMIN",
-    "SENIARADIT",
-    "AGENT"
-)
 def get_payment_details(agent_id):
     query = text("""
         SELECT p.application_no,p.transaction_id,p.amount,p.payment_for,p.status,p.created_at,
@@ -348,11 +257,18 @@ def get_payment_details(agent_id):
 
     if not row:
         return jsonify({"success": False}), 404
-
+    
+    data = dict(row._mapping)
+    # Mobile number decrypt
+    if data.get("mobile"):
+       data["mobile"] = decrypt_value(data["mobile"])
+    
     return jsonify({
         "success": True,
-        "data": dict(row._mapping)
+        "data": data
     })
+    
+
 @agent_bp.route("/create-payment/<int:agent_id>", methods=["POST"])
 def create_payment(agent_id):
     result = AgentModel.create_payment(agent_id)
@@ -361,60 +277,105 @@ def create_payment(agent_id):
         return jsonify(result), 200
 
     return jsonify(result), 500
+    
+
+# ✅ FIXED: Partial Applications - Agent ki access ivvadaniki
 @agent_bp.route("/partial-applications", methods=["GET"])
 @jwt_required()
-@roles_required(
-    "SCRUTINY",
-    "LEGAL_L1",
-    "LEGAL_L2",
-    "PLANNING",
-    "AUDIT",
-    "ENGINEER",
-    "AD",
-    "DIRECTOR",
-    "CHAIRMAN",
-    "ADMIN",
-    "SUPER_ADMIN",
-    "SENIARADIT",
-    "AGENT"
-)
 def partial_applications():
     try:
-        agent_id = int(get_jwt_identity())
+        current_user = get_jwt_identity()
+        claims = get_jwt()
 
-        data = AgentModel.get_partial_applications(agent_id)
+        print("JWT Identity:", current_user)
+        print("JWT Claims:", claims)
+
+        pan = claims.get("pan")
+
+        if not pan:
+            return jsonify({
+                "success": False,
+                "error": "PAN not found in token"
+            }), 400
+
+        # Get all applications
+        rows = db.session.execute(
+            text("""
+                SELECT
+                    id,
+                    application_no,
+                    agent_name,
+                    agent_type,
+                    created_at,
+                    pan
+                FROM agentregistration_details_t
+                ORDER BY created_at DESC
+            """)
+        ).fetchall()
+
+        data = []
+
+        # ✅ FIXED: Correct indentation for loop
+        for row in rows:
+            try:
+                db_pan = decrypt_value(row.pan)
+
+                print("===================================")
+                print("JWT PAN :", pan)
+                print("DB PAN  :", db_pan)
+                print("MATCH   :", db_pan.strip().upper() == pan.strip().upper())
+                print("APP NO  :", row.application_no)
+                print("===================================")
+
+                if db_pan.strip().upper() == pan.strip().upper():
+                    data.append({
+                        "application_id": row.id,
+                        "application_no": row.application_no,
+                        "name": row.agent_name,
+                        "name_type": row.agent_type,
+                        "status": "Partial",
+                        "created_at": str(row.created_at) if row.created_at else None
+                    })
+
+            except Exception as ex:
+                print("Error processing row:", ex)
 
         return jsonify({
             "success": True,
+            "count": len(data),
             "data": data
         }), 200
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
+
         return jsonify({
             "success": False,
-            "message": str(e)
+            "error": str(e)
         }), 500
+
 
 @agent_bp.route("/resume-application/<application_no>", methods=["GET"])
 @jwt_required()
-@roles_required(
-    "SCRUTINY",
-    "LEGAL_L1",
-    "LEGAL_L2",
-    "PLANNING",
-    "AUDIT",
-    "ENGINEER",
-    "AD",
-    "DIRECTOR",
-    "CHAIRMAN",
-    "ADMIN",
-    "SUPER_ADMIN",
-    "SENIARADIT",
-    "AGENT"
-)
 def resume_application(application_no):
     try:
-        result = AgentModel.agent_details_application_no(application_no)
+        # ✅ Get current user
+        current_user = get_jwt_identity()
+        
+        if isinstance(current_user, dict):
+            agent_id = current_user.get("agent_id")
+        else:
+            agent_id = int(current_user) if current_user else None
+        
+        if not agent_id:
+            return jsonify({
+                "success": False,
+                "message": "User not authenticated"
+            }), 401
+        
+        # ✅ Get application details
+        result = AgentModel.agent_details_application_no(application_no, agent_id)
 
         if result["success"]:
             return jsonify(result), 200
@@ -426,17 +387,3 @@ def resume_application(application_no):
             "success": False,
             "message": "Internal server error"
         }), 500
-@agent_bp.route("/send-otp-email", methods=["POST"])
-def send_otp_email_preview():
-    try:
-        data = request.get_json()
-        agent_id = data.get("agent_id")
-
-        if not agent_id:
-            return jsonify({"success": False, "message": "agent_id required"}), 400
-
-        result = AgentModel.send_otp_email_by_agent_id(agent_id)
-        return jsonify(result), 200
-
-    except Exception as e:
-        return jsonify({"success": False, "message": "Internal server error"}), 500

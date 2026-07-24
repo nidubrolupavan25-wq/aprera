@@ -1,12 +1,10 @@
-
-
 from app.models.database import db
 from sqlalchemy import text
 from datetime import datetime, timedelta
 from app.utils.mail_service import send_email_otp
 import json
 import random
-
+from app.utils.encryption import encrypt_value, decrypt_value
 
 class AgentModel:
 
@@ -81,6 +79,12 @@ class AgentModel:
             params = {
                 **data,
                 "application_no": application_no,
+
+                 "email": encrypt_value(data["email"]),
+                 "aadhaar": encrypt_value(data["aadhaar"]),
+                 "pan": encrypt_value(data["pan"]),
+                 "mobile": encrypt_value(data["mobile"]),
+
                 "photograph": json.dumps(data["photograph"]),
                 "pan_proof": json.dumps(data["pan_proof"]),
                 "address_proof": json.dumps(data["address_proof"]),
@@ -89,9 +93,6 @@ class AgentModel:
                 "self_declared_affidavit": json.dumps(data["self_declared_affidavit"]) if data.get("self_declared_affidavit") else None,
                 "last_five_years_project_details": json.dumps({"value": True if data.get("last_five_years_project_details") == "Yes" else False}),
                 "any_civil_criminal_cases": True if data.get("any_civil_criminal_cases") == "Yes" else False,
-                # "last_five_years_project_details": data.get("last_five_years_project_details"),
-                # "any_civil_criminal_cases": data.get("any_civil_criminal_cases"),
-                # "registration_other_states": data.get("registration_other_states"),
                 "registration_other_states": True if data.get("registration_other_states") == "Yes" else False,
             }
 
@@ -207,6 +208,19 @@ class AgentModel:
             if not agent_row:
                 return {"success": False, "message": "Agent not found"}
 
+            # Convert to dict and decrypt sensitive fields
+            agent_details = dict(agent_row)
+            
+            # Decrypt sensitive data only if they exist
+            if agent_details.get("email"):
+                agent_details["email"] = decrypt_value(agent_details["email"])
+            if agent_details.get("aadhaar"):
+                agent_details["aadhaar"] = decrypt_value(agent_details["aadhaar"])
+            if agent_details.get("pan"):
+                agent_details["pan"] = decrypt_value(agent_details["pan"])
+            if agent_details.get("mobile"):
+                agent_details["mobile"] = decrypt_value(agent_details["mobile"])
+
             # ---------------- PROJECTS ----------------
             project_query = text("""
                 SELECT id, project_name
@@ -257,7 +271,7 @@ class AgentModel:
             return {
                 "success": True,
                 "data": {
-                    "agent_details": dict(agent_row),
+                    "agent_details": agent_details,
                     "projects": [dict(p) for p in projects],
                     "litigations": [dict(l) for l in litigations],
                     "other_state_rera": [dict(o) for o in other_states]
@@ -297,8 +311,8 @@ class AgentModel:
         except Exception as e:
             return {
                 "success": False,
-            "message": "Internal server error"
-        }
+                "message": "Internal server error"
+            }
 
     @staticmethod
     def send_otp(agent_id):
@@ -314,7 +328,7 @@ class AgentModel:
             if not row:
                 return {"success": False, "message": "Agent not found"}
 
-            email = row.email
+            email = decrypt_value(row.email)
 
             otp = str(random.randint(100000, 999999))
 
@@ -345,7 +359,7 @@ class AgentModel:
     def verify_otp(agent_id, otp):
         try:
             query = text("""
-                SELECT a.application_no, a.agent_name
+                SELECT a.application_no, a.agent_name, a.pan
                 FROM agent_otp_t o
                 JOIN agentregistration_details_t a
                 ON a.id = o.agent_id
@@ -370,7 +384,7 @@ class AgentModel:
                 "success": True,
                 "application_no": row.application_no,
                 "agent_name": row.agent_name,
-                "pan": row.pan
+                "pan": decrypt_value(row.pan) if row.pan else None
             }
 
         except Exception as e:
@@ -449,7 +463,7 @@ class AgentModel:
                 }
 
             agent_id = row.id
-            email = row.email
+            email = decrypt_value(row.email)
 
             if not email:
                 return {
@@ -516,26 +530,59 @@ AP RERA
                 "success": False,
                 "message": "Internal server error"
             }
+
     # ===============================
-    # PARTIAL APPLICATIONS
+    # ✅ FIXED: PARTIAL APPLICATIONS
     # ===============================
     @staticmethod
     def get_partial_applications(agent_id):
-        query = text("""
-            SELECT
-                id AS agent_id,
-                application_no,
-                agent_name,
-                agent_type,
-                'Individual' AS name_type,
-                'Yet To Pay Reg Fee' AS status
-            FROM agentregistration_details_t
-            WHERE id = :agent_id
-        """)
-
-        rows = db.session.execute(query, {"agent_id": agent_id}).fetchall()
-
-        return [dict(r._mapping) for r in rows]
+        try:
+            # ✅ Get agent details first
+            agent_query = text("""
+                SELECT pan, agent_name, application_no
+                FROM agentregistration_details_t
+                WHERE id = :agent_id
+            """)
+            
+            agent = db.session.execute(agent_query, {"agent_id": agent_id}).fetchone()
+            
+            if not agent:
+                return []
+            
+            pan = agent.pan
+            
+            # ✅ Query all applications for this PAN
+            query = text("""
+                SELECT
+                    id AS application_id,
+                    application_no,
+                    agent_name AS name,
+                    'Individual' AS name_type,
+                    COALESCE(status, 'Partial') AS status,
+                    created_at
+                FROM agentregistration_details_t
+                WHERE pan = :pan
+                ORDER BY created_at DESC
+            """)
+            
+            rows = db.session.execute(query, {"pan": pan}).fetchall()
+            
+            applications = []
+            for row in rows:
+                applications.append({
+                    "application_id": row.application_id,
+                    "application_no": row.application_no,
+                    "name": row.name,
+                    "name_type": row.name_type,
+                    "status": row.status,
+                    "created_at": str(row.created_at) if row.created_at else None
+                })
+            
+            return applications
+            
+        except Exception as e:
+            print(f"Error in get_partial_applications: {e}")
+            return []
     
     @staticmethod
     def send_otp_email_by_agent_id(agent_id):
@@ -551,7 +598,7 @@ AP RERA
             if not row:
                 return {"success": False, "message": "Agent not found"}
 
-            email = row.email
+            email = decrypt_value(row.email)
             if not email:
                 return {"success": False, "message": "Email not available"}
 
@@ -576,7 +623,7 @@ AP RERA
             db.session.commit()
 
             # send email using your existing email function
-            from app.controllers.otp_controller import send_email_otp   # use correct import
+            from app.utils.mail_service import send_email_otp
 
             send_email_otp(email, otp)
 
@@ -716,6 +763,7 @@ AP RERA
                 "success": False,
                 "message": "Internal server error"
             }
+            
     @staticmethod
     def verify_otp_by_pan(pan, otp):
         try:
@@ -758,3 +806,40 @@ AP RERA
                 "success":False,
                 "message":str(e)
             }
+
+    # ===============================
+    # ✅ AGENT DETAILS BY APPLICATION NO
+    # ===============================
+    @staticmethod
+    def agent_details_application_no(application_no, agent_id=None):
+        try:
+            query = text("""
+                SELECT * FROM agentregistration_details_t 
+                WHERE application_no = :application_no
+            """)
+            
+            params = {"application_no": application_no}
+            
+            if agent_id:
+                query = text("""
+                    SELECT * FROM agentregistration_details_t 
+                    WHERE application_no = :application_no AND id = :agent_id
+                """)
+                params["agent_id"] = agent_id
+            
+            result = db.session.execute(query, params).fetchone()
+
+            if not result:
+                return {"success": False, "message": "Application not found"}
+
+            agent = dict(result._mapping)
+
+            # Decrypt sensitive data
+            for field in ["email", "mobile", "pan", "aadhaar"]:
+                if agent.get(field):
+                    agent[field] = decrypt_value(agent[field])
+
+            return {"success": True, "data": agent}
+
+        except Exception as e:
+            return {"success": False, "message": str(e)}

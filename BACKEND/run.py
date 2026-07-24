@@ -16,8 +16,4 @@ if __name__ == "__main__":
 
     print(f"Server starting at {host}:{port}")
 
-    app.run(
-        host=host,
-        port=port,
-        debug=False
-    )
+    app.run(host="127.0.0.1", port=8081, debug=True)

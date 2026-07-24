@@ -63,7 +63,7 @@ class Config:
         "ALLOWED_ORIGINS",
         "http://localhost:5174,"
         "http://127.0.0.1:5174,"
-        "https://n7vxv3pg-8081.inc1.devtunnels.ms"
+        "https://k0mqkt9g-8081.inc1.devtunnels.ms/"
     )
     # https://0jv8810n-5173.inc1.devtunnels.ms/
 

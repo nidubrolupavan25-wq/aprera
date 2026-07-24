@@ -45,61 +45,44 @@ const AgentDetailExisting = () => {
     }
   };
 
-  /* VERIFY OTP */
+  /* ✅ VERIFY OTP - FIXED */
   const handleVerifyOtp = async () => {
     if (!otp) {
       alert("Please enter OTP");
       return;
     }
 
-  //   try {
-  //         const res = await apiPost("api/otp/verify", {
-  //     panNumber: pan,
-  //     otp,
-  //   });
-  //    // ✅ SAVE PAN FOR DASHBOARD
-  //   sessionStorage.setItem("agent_pan", pan);
+    try {
+      // ✅ Correct endpoint - uses existing OTP controller
+      const res = await apiPost("api/otp/verify", {
+        panNumber: pan,
+        otp,
+      });
 
-  //   // ✅ redirect
-  //   navigate("/agent-dashboard");
-  //   // ✅ SAVE PAN FOR DASHBOARD
-  //   sessionStorage.setItem("agent_pan", pan);
-  //   } catch (error) {
-  //     alert(
-  //       error?.error ||
-  //       error?.message ||
-  //       "Invalid or expired OTP"
-  //     );
-  //   }
-  // };
-  const handleVerifyOtp = async () => {
-  if (!otp) {
-    alert("Please enter OTP");
-    return;
-  }
+      console.log("✅ VERIFY RESPONSE:", res);
 
-  try {
-    const res = await apiPost("api/agent/verify-otp", {
-    panNumber: pan,
-    otp,
-});
-console.log("LOGIN RESPONSE:", res);
+    if (res.success) {
 
-const token = res.token;
+    sessionStorage.setItem("agent_pan", pan);
 
-localStorage.setItem("token", token);
-
-console.log("Saved token =", localStorage.getItem("token"));
-
-if (res.success) {
     localStorage.setItem("token", res.token);
-    navigate("/agent-dashboard");
-}
 
-  } catch (error) {
-    alert(error?.message || "Invalid or expired OTP");
-  }
-}
+    localStorage.setItem("agent_id", res.agent_id);
+
+    console.log("TOKEN SAVED:", res.token);
+
+    navigate("/agent-dashboard");
+    }else {
+        alert(res.error || "Invalid or expired OTP");
+      }
+    } catch (error) {
+      console.error("❌ Verify Error:", error);
+      alert(
+        error?.error ||
+        error?.message ||
+        "Invalid or expired OTP"
+      );
+    }
   };
 
   return (
@@ -108,8 +91,8 @@ if (res.success) {
 
         <div className="agentexisting-breadcrumb-box">
           You are here :
-       <a href="/home"> <span className="agentexisting-crumb-link"> Home </span> </a>/
-        <span> Registration </span> /
+          <a href="/home"> <span className="agentexisting-crumb-link"> Home </span> </a>/
+          <span> Registration </span> /
           <span> Real Estate Agent Registration</span>
         </div>
 

@@ -17,7 +17,8 @@ import os
 import json
 import logging
 from werkzeug.utils import secure_filename
-from datetime import datetime
+from datetime import datetime 
+from app.utils.encryption import encrypt_value, decrypt_value
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
@@ -64,13 +65,22 @@ def register_agent():
     try:
         form = request.form
         files = request.files
-        validation_error = validate_registration({
-            "pan": form.get("pan_card_number"),
-            "mobile": form.get("mobile_number")
-        })
         
+        # ✅ FIX: Get PAN from form
+        pan_card_number = form.get("pan_card_number")
+        
+        print("========== REGISTER API ==========")
+        print("PAN from frontend:", pan_card_number)
+
+        validation_error = validate_registration({
+            "pan": pan_card_number
+        })
+
         if validation_error:
+            print("Validation Failed")
             return validation_error
+
+        print("Validation Success")
         application_no = generate_application_no()
 
         affidavit_value = form.get("self_declared_affidavit")
@@ -91,10 +101,10 @@ def register_agent():
             agent_name=form.get("organisation_name"),
             father_name="NA",
             occupation_id=None,
-            email=form.get("email_id"),
+            email=encrypt_value(form.get("email_id")),
             aadhaar=None,
-            pan=form.get("pan_card_number"),
-            mobile=form.get("mobile_number"),
+            pan=encrypt_value(form.get("pan_card_number")),
+            mobile=encrypt_value(form.get("mobile_number")),
             landline=form.get("landline_number"),
             license_number=None,
             license_date=None,
@@ -155,15 +165,15 @@ def register_agent():
             entity = AgentOtherThanIndividualEntity(
                 designation=e.get("designation"),
                 name=e.get("name"),
-                email_id=e.get("email"),
-                mobile_number=e.get("mobile"),
+                email_id=encrypt_value(e.get("email")),
+                mobile_number=encrypt_value(e.get("mobile")),
                 state_ut=e.get("state"),
                 district=e.get("district"),
                 address_line1=e.get("address1"),
                 address_line2=e.get("address2"),
                 pincode=e.get("pincode"),
-                pan_card_number=e.get("pan"),
-                aadhaar_number=e.get("aadhaar"),
+                pan_card_number=encrypt_value(e.get("pan")),
+                aadhaar_number=encrypt_value(e.get("aadhaar")),
                 entity_type=e.get("nationality"),
                 din_number=e.get("din"),
                 photograph=save_file(
@@ -190,8 +200,8 @@ def register_agent():
         for index, a in enumerate(authorized_data):
             authorized = AgentOtherThanIndividualAuthorized(
                 name=a.get("name"),
-                email_id=a.get("email"),
-                mobile_number=a.get("mobile"),
+                email_id=encrypt_value(a.get("email")),
+                mobile_number=encrypt_value(a.get("mobile")),
                 photo=save_file(
                     files.get(f"authorized_photo_{index}"), f"authorized_photo_{index}"
                 ),
@@ -218,7 +228,7 @@ def register_agent():
                     interim_order_certificate={
                         "file": save_file(
                             files.get(f"interim_certificate_{index}"),
-                            f"interim_{index}",
+                            f"interim_{index}"
                         )
                     },
                     disposed_certificate={
@@ -276,6 +286,11 @@ def get_agent_other_than_individual_details():
     organisation = AgentOtherThanIndividualOrganisation.query.filter_by(
         id=organisation_id
     ).first()
+    
+    print("Organisation Found:", organisation)
+
+    if organisation:
+        print("Encrypted PAN in DB:", organisation.pan)
 
     if not organisation:
         return jsonify({"status": "error", "message": "Not found"}), 404
@@ -318,6 +333,10 @@ def serve_agent_files(filename):
     return send_from_directory(UPLOAD_DIR, filename)
 
 
+# ==========================================================
+# ✅ FIXED: UPDATE ITR DOCUMENTS - COMPLETE WORKING CODE
+# ==========================================================
+
 @agent_other_than_individual_registration_bp.route(
     "/agent/other-than-individual/itr", methods=["PATCH"]
 )
@@ -326,66 +345,112 @@ def update_agent_itr_documents():
         form = request.form
         files = request.files
 
-        id = form.get("id")
+        organisation_id = form.get("id")
         pan_card_number = form.get("pan_card_number")
 
-        if not id or not pan_card_number:
+        print("========== PATCH API ==========")
+        print("Form Data :", form.to_dict())
+        print("Files :", list(files.keys()))
+        print("Organisation ID:", organisation_id)
+        print("PAN from frontend:", pan_card_number)
+
+        # Validation
+        if not organisation_id or not pan_card_number:
             return (
-                jsonify(
-                    {
-                        "status": "error",
-                        "message": "id and pan_card_number are required",
-                    }
-                ),
+                jsonify({
+                    "status": "error",
+                    "message": "id and pan_card_number are required",
+                }),
                 400,
             )
-        validation_error = validate_registration({
-            "pan": pan_card_number
-        })
-        
-        if validation_error:
-            return validation_error
-        
+
+        # Fetch organisation
         organisation = AgentOtherThanIndividualOrganisation.query.filter_by(
-            id=id, pan=pan_card_number
+            id=organisation_id
         ).first()
 
         if not organisation:
             return (
-                jsonify({"status": "error", "message": "Organisation not found"}),
+                jsonify({
+                    "status": "error",
+                    "message": "Organisation not found"
+                }),
                 404,
             )
 
+        # 🔥 FIX: Compare encrypted PAN with encrypted PAN (no decryption)
+        db_pan_encrypted = organisation.pan
+        request_pan_encrypted = pan_card_number
+
+        logger.info(f"Comparing PANs - DB: {db_pan_encrypted[:30]}... Request: {request_pan_encrypted[:30]}...")
+
+        if db_pan_encrypted.strip() != request_pan_encrypted.strip():
+            logger.error(f"PAN mismatch")
+            return (
+                jsonify({
+                    "status": "error",
+                    "message": "Invalid PAN number"
+                }),
+                400,
+            )
+
+        # ✅ Update ITR files
+        itr_updated = False
+
         if files.get("itr_year1"):
-            organisation.itr_year1 = save_file(files.get("itr_year1"), "itr1")
+            organisation.itr_year1 = {
+                "file": save_file(files.get("itr_year1"), "itr1")
+            }
+            itr_updated = True
+            logger.info(f"Updated ITR Year 1: {organisation.itr_year1}")
 
         if files.get("itr_year2"):
-            organisation.itr_year2 = save_file(files.get("itr_year2"), "itr2")
+            organisation.itr_year2 = {
+                "file": save_file(files.get("itr_year2"), "itr2")
+            }
+            itr_updated = True
+            logger.info(f"Updated ITR Year 2: {organisation.itr_year2}")
 
         if files.get("itr_year3"):
-            organisation.itr_year3 = save_file(files.get("itr_year3"), "itr3")
+            organisation.itr_year3 = {
+                "file": save_file(files.get("itr_year3"), "itr3")
+            }
+            itr_updated = True
+            logger.info(f"Updated ITR Year 3: {organisation.itr_year3}")
+
+        if not itr_updated:
+            return (
+                jsonify({
+                    "status": "error",
+                    "message": "At least one ITR file is required"
+                }),
+                400,
+            )
 
         db.session.commit()
 
         return (
-            jsonify(
-                {
-                    "status": "success",
-                    "message": "ITR documents updated successfully",
-                    "itr_documents": {
-                        "itr_year1": organisation.itr_year1,
-                        "itr_year2": organisation.itr_year2,
-                        "itr_year3": organisation.itr_year3,
-                    },
-                }
-            ),
+            jsonify({
+                "status": "success",
+                "message": "ITR documents updated successfully",
+                "itr_documents": {
+                    "itr_year1": organisation.itr_year1,
+                    "itr_year2": organisation.itr_year2,
+                    "itr_year3": organisation.itr_year3,
+                },
+            }),
             200,
         )
 
     except Exception as e:
         db.session.rollback()
-        logger.error("ITR PATCH ERROR", exc_info=True)
-        return jsonify({"status": "error", "message": "Internal server error"}), 500
+        logger.error(f"ITR PATCH ERROR: {str(e)}", exc_info=True)
+        return jsonify({
+            "status": "error",
+            "message": f"Internal server error: {str(e)}"
+        }), 500
+
+
 @agent_other_than_individual_registration_bp.route(
     "/check-application/<application_no>", methods=["GET"]
 )

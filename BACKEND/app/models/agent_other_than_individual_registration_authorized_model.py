@@ -1,5 +1,6 @@
 from app.models.database import db
 from datetime import datetime
+from app.utils.encryption import decrypt_value
 
 class AgentOtherThanIndividualAuthorized(db.Model):
     __tablename__ = "agent_authorized_details_t"
@@ -21,8 +22,8 @@ class AgentOtherThanIndividualAuthorized(db.Model):
         return {
             "id": self.id,
             "name": self.name,
-            "mobile_number": self.mobile_number,
-            "email_id": self.email_id,
+            "mobile_number": decrypt_value(self.mobile_number) if self.mobile_number else None,
+            "email_id": decrypt_value(self.email_id) if self.email_id else None,
             "photo": self.photo,
             "board_resolution": self.board_resolution,
             "created_at": (

@@ -1,7 +1,7 @@
 from app.models.database import db
 from datetime import datetime
 import json
-
+from app.utils.encryption import decrypt_value
 
 class AgentOtherThanIndividualOrganisation(db.Model):
     __tablename__ = "agentregistration_details_t"
@@ -36,6 +36,7 @@ class AgentOtherThanIndividualOrganisation(db.Model):
     pan_proof = db.Column(db.JSON, nullable=False)
     address_proof = db.Column(db.JSON, nullable=False)
 
+    # ✅ These should be JSON fields
     itr_year1 = db.Column(db.JSON, nullable=True)
     itr_year2 = db.Column(db.JSON, nullable=True)
     itr_year3 = db.Column(db.JSON, nullable=True)
@@ -91,26 +92,26 @@ class AgentOtherThanIndividualOrganisation(db.Model):
 
     def to_dict(self):
         return {
-            "organisation_id": self.id,  # mapped
-            "application_id": self.application_no,  # mapped
+            "organisation_id": self.id,
+            "application_id": self.application_no,
             "organisation_type": self.organisation_type,
-            "organisation_name": self.agent_name,  # mapped (if needed)
+            "organisation_name": self.agent_name,
             "registration_identifier": self.registration_identifier,
             "registration_date": self.registration_date,
             "registration_cert_doc": self.registration_cert_doc,
-            "pan_card_number": self.pan,  # mapped
+            "pan_card_number": decrypt_value(self.pan) if self.pan else None,
             "pan_card_doc": (
                 self.pan_proof.get("file") if self.pan_proof else None
-            ),  # mapped (if storing here)
+            ),
             "gst_number": self.gst_number,
             "gst_doc": self.gst_doc,
             "legal_document": self.legal_document,
-            "email_id": self.email,  # mapped
-            "mobile_number": self.mobile,  # mapped
-            "landline_number": self.landline,  # mapped
-            "address_line1": self.address1,  # mapped
-            "address_line2": self.address2,  # mapped
-            "state": self.state_id,  # mapped
+            "email_id": decrypt_value(self.email) if self.email else None,
+            "mobile_number": decrypt_value(self.mobile) if self.mobile else None,
+            "landline_number": self.landline,
+            "address_line1": self.address1,
+            "address_line2": self.address2,
+            "state": self.state_id,
             "district": self.district,
             "mandal": self.mandal,
             "village": self.village,
@@ -130,7 +131,8 @@ class AgentOtherThanIndividualOrganisation(db.Model):
                 if self.created_at
                 else None
             ),
-            "itr_year1_doc": self.itr_year1,  # mapped
-            "itr_year2_doc": self.itr_year2,  # mapped
-            "itr_year3_doc": self.itr_year3,  # mapped
+            # ✅ ITR fields
+            "itr_year1_doc": self.itr_year1.get("file") if self.itr_year1 else None,
+            "itr_year2_doc": self.itr_year2.get("file") if self.itr_year2 else None,
+            "itr_year3_doc": self.itr_year3.get("file") if self.itr_year3 else None,
         }

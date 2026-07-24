@@ -8,26 +8,19 @@ const AgentDashboard = () => {
   const [applications, setApplications] = useState([]);
 
   const navigate = useNavigate();
-  // const pan = sessionStorage.getItem("agent_pan");
 
   useEffect(() => {
-    // if (!pan) return;
-
     const url =
       activeTab === "partial"
-        // ? `/api/agent/partial-applications/${pan}`
-        // : `/api/agent/shortfall-applications/${pan}`;
-        ? `/api/agent/partial-applications`
-        : `/api/agent/shortfall-applications`;
-
+        ? "/api/agent/partial-applications"
+        : "/api/agent/shortfall-applications";
 
     apiGet(url)
       .then((res) => {
         console.log("FULL RESPONSE 👉", res);
 
-        // if (res?.success === true && Array.isArray(res.data)) {
         if (res.success) {
-          setApplications(res.data);
+          setApplications(res.data || []);
         } else {
           setApplications([]);
         }
@@ -36,27 +29,24 @@ const AgentDashboard = () => {
         console.error("API ERROR", err);
         setApplications([]);
       });
-       }, [activeTab]);
-  // }, [activeTab, pan]);
+  }, [activeTab]);
 
- const openApplication = (app) => {
-  // ✅ store agentId where ApplicantDetails expects it
-  localStorage.setItem("agentId", app.agent_id);
+  // ✅ Replace old function with this one
+  const openApplication = (app) => {
+    console.log("Clicked Application:", app);
 
-  // optional (if needed later)
-  sessionStorage.setItem("application_no", app.application_no);
+    localStorage.setItem("agentId", app.application_id);
+    sessionStorage.setItem("application_no", app.application_no);
 
-  navigate("/applicant-details", {
-    state: {
-      agentId: app.agent_id,
-    },
-  });
-};
-
+    navigate("/applicant-details", {
+      state: {
+        agentId: app.application_id,
+      },
+    });
+  };
 
   return (
     <div className="agent-dashboard-wrapper">
-      {/* LEFT MENU */}
       <div className="agent-sidebar">
         <div
           className={`menu-item ${activeTab === "partial" ? "active" : ""}`}
@@ -73,7 +63,6 @@ const AgentDashboard = () => {
         </div>
       </div>
 
-      {/* RIGHT CONTENT */}
       <div className="agent-content">
         <h3 className="page-title">
           {activeTab === "partial"
@@ -95,8 +84,7 @@ const AgentDashboard = () => {
           <tbody>
             {applications.length > 0 ? (
               applications.map((app, i) => (
-                // <tr key={i}>
-                <tr key={app.agent_id}>
+                <tr key={app.application_id}>
                   <td>{i + 1}</td>
 
                   <td>
@@ -108,8 +96,11 @@ const AgentDashboard = () => {
                     </span>
                   </td>
 
-                  <td>{app.agent_name}</td>
+                  {/* ✅ Backend returns 'name' */}
+                  <td>{app.name}</td>
+
                   <td>{app.name_type}</td>
+
                   <td>{app.status}</td>
                 </tr>
               ))

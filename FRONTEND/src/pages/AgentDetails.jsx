@@ -6,10 +6,16 @@ import { useState, useEffect } from "react";
 import { apiGet } from "../api/api";
 import AgentStepper from "../components/AgentStepper";
 import { useAgentForm } from "./AgentFormContext";
-const BASE_URL = "https://4bckgspd-8080.inc1.devtunnels.ms";
+const BASE_URL = "https://k0mqkt9g-8081.inc1.devtunnels.ms/";
 const AgentDetailsOther = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const agentId =
+  location.state?.agentId || localStorage.getItem("agentId");
+
+console.log("Location State:", location.state);
+console.log("Agent ID:", agentId);
+apiGet(`/api/agent/preview/${agentId}`)
   const passedPan = location.state?.pan || "";
    const applicationIdFromNav = location.state?.application_id;
   const organisationIdFromNav = location.state?.organisation_id;
@@ -207,7 +213,7 @@ const statesList = [
   const [form, setForm] = useState({
     orgType: "",
     orgName: "",
-    cin: "", 
+    cinNumber: "", 
     regNumber: "",
     regDate: "",
     pan: "",
@@ -1159,7 +1165,7 @@ if (form.orgType === "Company" || form.orgType === "Joint Venture") {
 
   }
 
-  registrationNo = form.cin;
+  registrationNo = form.cinNumber;
   
 } 
 else if (form.orgType === "Trust/Society") {
@@ -1376,7 +1382,7 @@ console.log("===== FORM DATA END =====");
 
   try {
     const res = await fetch(
-      "https://4bckgspd-8080.inc1.devtunnels.ms/api/agent/other-than-individual",
+      "https://k0mqkt9g-8081.inc1.devtunnels.ms/api/agent/other-than-individual",
       {
         method: "POST",
         body: formData,
@@ -1429,7 +1435,7 @@ const validateMandatoryFields = () => {
 
   /* ===== COMPANY / JOINT VENTURE ===== */
   if (form.orgType === "Company" || form.orgType === "Joint Venture") {
-    if (!form.cin) return "Please enter CIN Number";
+    if (!form.cinNumber) return "Please enter CIN Number";
     if (!form.regDate) return "Please select Date of Registration";
    if (!hasFileOrUrl(files.regCert, files.regCertUrl)) return "Upload Registration Certificate";
   }
@@ -1835,7 +1841,7 @@ const error = validateMandatoryFields();
 let regValue = "";
 
 if (form.orgType === "Company" || form.orgType === "Joint Venture") {
-  regValue = form.cin;
+  regValue = form.cinNumber;
 }
 
 else if (form.orgType === "Trust/Society") {

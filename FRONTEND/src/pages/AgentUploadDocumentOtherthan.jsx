@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import AgentStepper from "../components/AgentStepper";
 import axios from "axios";
 
-const BASE_URL = "https://4bckgspd-8080.inc1.devtunnels.ms";
+const BASE_URL = "https://k0mqkt9g-8081.inc1.devtunnels.ms/";
 
 export default function AgentUploadDocumentOtherthan() {
 
@@ -28,6 +28,7 @@ export default function AgentUploadDocumentOtherthan() {
 
   const [agreed, setAgreed] = useState(false);
   const [showError, setShowError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   console.log("📦 LOCATION STATE FULL:", location.state);
 
@@ -85,16 +86,26 @@ export default function AgentUploadDocumentOtherthan() {
       return;
     }
 
+    // Max file size 10MB
+    if (file.size > 10 * 1024 * 1024) {
+      setShowError("File size should be less than 10MB");
+      e.target.value = "";
+      return;
+    }
+
     setFiles(prev => ({
       ...prev,
       [e.target.name]: file
     }));
 
+    setShowError("");
   };
 
   /* ================= DOWNLOAD FILE ================= */
 
   const downloadFile = (file) => {
+
+    if (!file) return;
 
     const url = URL.createObjectURL(file);
 
@@ -114,38 +125,64 @@ export default function AgentUploadDocumentOtherthan() {
   const handleSubmit = async () => {
 
     setShowError("");
+    setLoading(true);
 
-   if (!files.year1 && !files.year1Url) {
-  setShowError("Please Upload Income Tax Return Acknowledgement of Year 1");
-  return;
-}
+    // 🔥 Check if at least one file is uploaded OR already exists
+    const hasYear1 = files.year1 || files.year1Url;
+    const hasYear2 = files.year2 || files.year2Url;
+    const hasYear3 = files.year3 || files.year3Url;
 
-if (!files.year2 && !files.year2Url) {
-  setShowError("Please Upload Income Tax Return Acknowledgement of Year 2");
-  return;
-}
+    if (!hasYear1) {
+      setShowError("Please Upload Income Tax Return Acknowledgement of Year 1");
+      setLoading(false);
+      return;
+    }
 
-if (!files.year3 && !files.year3Url) {
-  setShowError("Please Upload Income Tax Return Acknowledgement of Year 3");
-  return;
-}
+    if (!hasYear2) {
+      setShowError("Please Upload Income Tax Return Acknowledgement of Year 2");
+      setLoading(false);
+      return;
+    }
+
+    if (!hasYear3) {
+      setShowError("Please Upload Income Tax Return Acknowledgement of Year 3");
+      setLoading(false);
+      return;
+    }
 
     if (!agreed) {
-      alert("Please check the Self Declaration");
+      setShowError("Please check the Self Declaration");
+      setLoading(false);
       return;
     }
 
     try {
 
+      console.log("PAN from state:", pan_card_number);
+      console.log("Organisation ID:", organisation_id);
+
       const formData = new FormData();
 
-      formData.append("application_id", application_id);
       formData.append("id", organisation_id);
       formData.append("pan_card_number", pan_card_number);
 
-      formData.append("itr_year1", files.year1);
-      formData.append("itr_year2", files.year2);
-      formData.append("itr_year3", files.year3);
+      // ✅ Only append if file exists (new file uploaded)
+      if (files.year1) {
+        formData.append("itr_year1", files.year1);
+      }
+
+      if (files.year2) {
+        formData.append("itr_year2", files.year2);
+      }
+
+      if (files.year3) {
+        formData.append("itr_year3", files.year3);
+      }
+
+      // Debug: Log FormData
+      for (let pair of formData.entries()) {
+        console.log(pair[0] + ': ' + (pair[1] instanceof File ? pair[1].name : pair[1]));
+      }
 
       const res = await fetch(
         `${BASE_URL}/api/agent/other-than-individual/itr`,
@@ -157,8 +194,11 @@ if (!files.year3 && !files.year3Url) {
 
       const data = await res.json();
 
+      console.log("Response:", data);
+
       if (!res.ok) {
         setShowError(data.message || "Upload failed");
+        setLoading(false);
         return;
       }
 
@@ -173,8 +213,9 @@ if (!files.year3 && !files.year3Url) {
       });
 
     } catch (err) {
-      console.error(err);
+      console.error("Upload error:", err);
       setShowError("Server error. Try again later.");
+      setLoading(false);
     }
 
   };
@@ -208,7 +249,7 @@ if (!files.year3 && !files.year3Url) {
 
         {showError && (
           <div className="zagentud-inline-error">
-            <span>{showError}</span>
+            <span>⚠️ {showError}</span>
             <button
               type="button"
               className="zagentud-inline-error-close"
@@ -253,20 +294,21 @@ if (!files.year3 && !files.year3Url) {
                     onClick={() => downloadFile(files.year1)}
                     style={{ cursor: "pointer", color: "#1e90ff", textDecoration: "underline" }}
                   >
-                    {files.year1.name}
+                    📄 {files.year1.name}
                   </span>
 
                 ) : files.year1Url ? (
 
                   <a
-                    href={`${BASE_URL}/api/${files.year1Url}`}
+                    href={`${BASE_URL}${files.year1Url}`}
                     target="_blank"
                     rel="noreferrer"
+                    style={{ color: "#1e90ff" }}
                   >
-                    View Uploaded File
+                    📄 View Uploaded File
                   </a>
 
-                ) : "-"}
+                ) : <span style={{ color: "#999" }}>-</span>}
 
               </td>
 
@@ -294,20 +336,21 @@ if (!files.year3 && !files.year3Url) {
                     onClick={() => downloadFile(files.year2)}
                     style={{ cursor: "pointer", color: "#1e90ff", textDecoration: "underline" }}
                   >
-                    {files.year2.name}
+                    📄 {files.year2.name}
                   </span>
 
                 ) : files.year2Url ? (
 
                   <a
-                    href={`${BASE_URL}/api/${files.year2Url}`}
+                    href={`${BASE_URL}${files.year2Url}`}
                     target="_blank"
                     rel="noreferrer"
+                    style={{ color: "#1e90ff" }}
                   >
-                    View Uploaded File
+                    📄 View Uploaded File
                   </a>
 
-                ) : "-"}
+                ) : <span style={{ color: "#999" }}>-</span>}
 
               </td>
 
@@ -335,20 +378,21 @@ if (!files.year3 && !files.year3Url) {
                     onClick={() => downloadFile(files.year3)}
                     style={{ cursor: "pointer", color: "#1e90ff", textDecoration: "underline" }}
                   >
-                    {files.year3.name}
+                    📄 {files.year3.name}
                   </span>
 
                 ) : files.year3Url ? (
 
                   <a
-                    href={`${BASE_URL}/api/${files.year3Url}`}
+                    href={`${BASE_URL}${files.year3Url}`}
                     target="_blank"
                     rel="noreferrer"
+                    style={{ color: "#1e90ff" }}
                   >
-                    View Uploaded File
+                    📄 View Uploaded File
                   </a>
 
-                ) : "-"}
+                ) : <span style={{ color: "#999" }}>-</span>}
 
               </td>
 
@@ -357,30 +401,31 @@ if (!files.year3 && !files.year3Url) {
           </tbody>
 
         </table>
+
         <div className="zagentud-declaration">  
           <h3 className="zagentud-section-heading">Declaration</h3>
           <div className="zagentud-declaration-row"> 
             <label className="zagentud-declaration-text">
-               <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} />
-                <span> I/We </span> <input type="text" className="zagentud-declaration-input" /> <span> solemnly affirm and declare that the particulars given above are correct to my/our knowledge and belief. </span> 
-                </label>
-                 </div>
-        </div>
-        <div className="zagentud-declaration">
-
-        
-
-          <div className="zagentud-declaration-actions">
-
-            <button
-              className="zagentud-btn-primary"
-              onClick={handleSubmit}
-            >
-              Save And Continue
-            </button>
-
+              <input 
+                type="checkbox" 
+                checked={agreed} 
+                onChange={(e) => setAgreed(e.target.checked)} 
+              />
+              <span> I/We </span> 
+              <input type="text" className="zagentud-declaration-input" placeholder="Enter your name" /> 
+              <span> solemnly affirm and declare that the particulars given above are correct to my/our knowledge and belief. </span> 
+            </label>
           </div>
+        </div>
 
+        <div className="zagentud-declaration-actions">
+          <button
+            className="zagentud-btn-primary"
+            onClick={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? "⏳ Uploading..." : "💾 Save And Continue"}
+          </button>
         </div>
 
       </div>

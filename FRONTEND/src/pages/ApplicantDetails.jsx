@@ -129,77 +129,7 @@ const [otherStates] = useState([
     
   });
 
-  //const completedStep = Number(localStorage.getItem("completedStep") || 0);
-
-
-  //   const [files, setFiles] = useState({
-  //   photograph: null,
-  //   panProof: null,
-  //   addressProof: null,
-  // });
-    /* ================= LOAD SAVED FORM ================= */
-
-// useEffect(() => {
-//   if (!applicationNo) return;
-
-//   apiGet(`api/agent/resume-applicationss/${applicationNo}`)
-//     .then((res) => {
-//       if (res.success && res.data) {
-//         const d = res.data;
-
-//         setForm((prev) => ({
-//           ...prev,
-
-//           // -------- BASIC DETAILS --------
-//           agentName: d.agent_name || "",
-//           fatherName: d.father_name || "",
-//           occupation: d.occupation_id || "",
-//           email: d.email || "",
-//           aadhaar: d.aadhaar || "",
-//           pan: d.pan || "",
-//           mobile: d.mobile || "",
-//           landline: d.landline || "",
-//           licenseNumber: d.license_number || "",
-//           licenseDate: d.license_date || "",
-
-//           // -------- ADDRESS --------
-//           address1: d.address1 || "",
-//           address2: d.address2 || "",
-//           state: d.state_id || "",
-//           district: d.district || "",
-//           mandal: d.mandal || "",
-//           village: d.village || "",
-//           pincode: d.pincode || "",
-//         }));
-
-//         // -------- FILE INFO (display only) --------
-//         setUploadedFiles({
-//           photograph: d.photograph || null,
-//           panProof: d.pan_proof || null,
-//           addressProof: d.address_proof || null,
-//           selfAffidavitFile: d.self_declared_affidavit || null,
-//         });
-//       }
-//     })
-//     .catch((err) => {
-//       console.error("Resume error:", err);
-//     });
-// }, [applicationNo]);
-
-// useEffect(() => {
-//   const agentId = localStorage.getItem("agentId");
-//   if (agentId) {
-//     localStorage.setItem("completedStep", "1");
-//   }
-// }, []);
-// useEffect(() => {
-//   const completed = Number(localStorage.getItem("completedStep") || 0);
-
-//   // 🔥 ensure agent step stays completed
-//   if (completed < 1) {
-//     localStorage.setItem("completedStep", "1");
-//   }
-// }, []);
+  
 
 
 useEffect(() => {
@@ -221,17 +151,26 @@ useEffect(() => {
 
 
 useEffect(() => {
-  // 🚫 If new PAN flow, do NOT load preview
   if (passedPan) return;
 
-  const agentId = location.state?.agentId || localStorage.getItem("agentId");
+  const agentId =
+    location.state?.agentId || localStorage.getItem("agentId");
+
   if (!agentId) return;
+  console.log("Location State =", location.state);
+  console.log("LocalStorage agentId =", localStorage.getItem("agentId"));
 
   apiGet(`/api/agent/preview/${agentId}`)
     .then((res) => {
-      if (!res.success) return;
 
-      const { agent_details, projects, litigations, other_state_rera } = res.data;
+      console.log("Preview Response:", res);
+
+      const {
+        agent_details,
+        projects,
+        litigations,
+        other_state_rera,
+      } = res.data;
       
 
       /* ================= BASIC FORM ================= */
