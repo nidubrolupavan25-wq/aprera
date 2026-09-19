@@ -276,6 +276,7 @@ def admin_login():
     admin.email
 )
         print("Final Email:", real_email)
+        print("Generated OTP:", otp)
         send_otp_email(
     real_email,
     otp
@@ -322,6 +323,11 @@ def verify_otp():
 
         if datetime.now() > admin.otp_expiry:
             return jsonify({"error": "OTP expired"}), 401
+        
+        print("Entered OTP :", otp)
+        print("Entered Hash:", hash_otp(otp))
+        print("DB Hash     :", admin.otp_hash)
+        print("Match       :", hmac.compare_digest(hash_otp(otp), admin.otp_hash))
 
         if not hmac.compare_digest(hash_otp(otp), admin.otp_hash):
 
@@ -349,15 +355,15 @@ def verify_otp():
         db.session.commit()
         db.session.refresh(admin)
 
-        token = create_access_token(
-    identity=str(admin.id)
-)
+#         token = create_access_token(
+#     identity=str(admin.id)
+# )
 # Create JWT Token
         access_token = create_access_token(
-    identity=str(result["id"]),
+    identity=str(admin.id),
     additional_claims={
-        "username": result["username"],
-        "role": result["role"]
+        "username": admin.username,
+        "role": admin.role
     }
 )
         return jsonify({
@@ -366,7 +372,14 @@ def verify_otp():
     "admin": admin_response(admin)
 }), 200
 
+    # except Exception as e:
+    #     db.session.rollback()
+    #     print(e)
+    #     return jsonify({"error": "Internal server error"}), 500
     except Exception as e:
         db.session.rollback()
-        print(e)
-        return jsonify({"error": "Internal server error"}), 500
+        traceback.print_exc()
+        print("ERROR :", e)
+        return jsonify({
+            "error": str(e)
+        }),500

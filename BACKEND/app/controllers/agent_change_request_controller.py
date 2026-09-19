@@ -491,7 +491,7 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 
 @agent_change_request_bp.route("/change-request/save", methods=["POST"])
-@jwt_required()
+#@jwt_required()
 def save_change_request():
 
     try:
